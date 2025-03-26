@@ -1,0 +1,7 @@
+panel
+param
+langchain
+sentence-transformers
+transformers
+pyyaml
+python-dotenv
