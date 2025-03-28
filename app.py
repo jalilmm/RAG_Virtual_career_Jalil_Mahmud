@@ -173,7 +173,7 @@ class cbfs(param.Parameterized):
         self.panels.append(
             pn.Row(
                 pn.layout.HSpacer(),
-                pn.pane.Markdown(f"<div style='background:#f1f8e9; padding:10px; border-radius:10px;'><b>Virtual Jalil</b>: {self.answer}</div>", width=600),
+                pn.pane.Markdown(f"<div style='background:#f1f8e9; padding:10px; border-radius:10px;'><b>Virtual</b>: {self.answer}</div>", width=600),
                 pn.layout.HSpacer(),
             )
         )
@@ -218,6 +218,7 @@ main_layout = pn.Column(
     align="center"
 )
 
+
 app = pn.Row(
     pn.layout.HSpacer(),
     pn.Column(
@@ -233,6 +234,5 @@ app = pn.Row(
     pn.layout.HSpacer(),
     sizing_mode="stretch_both"
 )
-
 
 app.servable()
