@@ -16,7 +16,10 @@ A conversational AI chatbot app designed for interactive career-related queries.
 
 ---
 
-## 🛠 Tech Stack
+Click link and give a try : https://chatbot-panel-app.onrender.com
+
+
+## Tech Stack
 
 - Python
 - [Panel](https://panel.holoviz.org/)
