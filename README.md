@@ -27,3 +27,5 @@ A conversational AI chatbot app designed for interactive career-related queries.
 - LangChain
 - PyPDFLoader
 - Telegram API (optional)
+- ![image](https://github.com/user-attachments/assets/096c87c5-0f09-4971-b533-ba6eddf00e89)
+
