@@ -34,7 +34,6 @@ FAISS_DB_PATH = "faiss_index"
 embedding = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
 
 # Persistent history load/save
-
 def save_history(history):
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
@@ -48,7 +47,6 @@ def load_history():
 chat_history_log = load_history()
 
 # Save chat to FAISS
-
 def save_chat_to_faiss(history):
     if not history:
         return
@@ -60,13 +58,12 @@ def save_chat_to_faiss(history):
 
 def load_chat_faiss():
     if os.path.exists(os.path.join(CHAT_FAISS_PATH, "index.faiss")):
-        return FAISS.load_local(FAISS_DB_PATH, embeddings=embedding, allow_dangerous_deserialization=True)
+        return FAISS.load_local(CHAT_FAISS_PATH, embeddings=embedding, allow_dangerous_deserialization=True)
     return None
 
 save_chat_to_faiss(chat_history_log)
 
 # Telegram sender
-
 def send_telegram_message(message):
     if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -75,20 +72,18 @@ def send_telegram_message(message):
             data = {"chat_id": TELEGRAM_CHAT_ID, "text": chunk}
             response = requests.post(url, data=data)
             if response.status_code != 200:
-                print(f"🚫 Failed to send chunk: {response.status_code}")
+                print(f"F6AB Failed to send chunk: {response.status_code}")
                 print(response.text)
 
 # Load documents and embed
-
 text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 
 def load_and_embed(folder_path):
     if os.path.exists(os.path.join(FAISS_DB_PATH, "index.faiss")):
-        print("🔁 Loading FAISS index from disk...")
+        print("F501 Loading FAISS index from disk...")
         return FAISS.load_local(FAISS_DB_PATH, embeddings=embedding, allow_dangerous_deserialization=True)
 
-
-    print("🧠 Creating FAISS index from documents...")
+    print("F9E0 Creating FAISS index from documents...")
     all_chunks = []
     for file in glob(os.path.join(folder_path, "*.pdf")):
         loader = PyPDFLoader(file)
@@ -150,8 +145,11 @@ class cbfs(param.Parameterized):
             docs = self.chat_db.similarity_search(query, k=3)
             for doc in docs:
                 meta = doc.metadata
-                memory.chat_memory.add_user_message(meta["user"])
-                memory.chat_memory.add_ai_message(meta["bot"])
+                user_msg = meta.get("user", "")
+                bot_msg = meta.get("bot", "")
+                if user_msg and bot_msg:
+                    memory.chat_memory.add_user_message(user_msg)
+                    memory.chat_memory.add_ai_message(bot_msg)
 
         result = self.qa.invoke({"question": query})
         full_answer = result.get("answer", "").strip()
@@ -162,11 +160,23 @@ class cbfs(param.Parameterized):
         save_history(chat_history_log)
         save_chat_to_faiss(chat_history_log)
 
-        telegram_msg = f"📥 User prompt:\n{query}\n\n📤 Bot answer:\n{self.answer}"
+        telegram_msg = f"\U0001F4E5 User prompt:\n{query}\n\n\U0001F4E4 Bot answer:\n{self.answer}"
         send_telegram_message(telegram_msg)
 
-        self.panels.append(pn.Row('User:', pn.pane.Markdown(query, width=600)))
-        self.panels.append(pn.Row('Answer:', pn.pane.Markdown(self.answer, width=600)))
+        self.panels.append(
+            pn.Row(
+                pn.layout.HSpacer(),
+                pn.pane.Markdown(f"<div style='background:#e0f7fa; padding:10px; border-radius:10px;'><b>You</b>: {query}</div>", width=600),
+                pn.layout.HSpacer(),
+            )
+        )
+        self.panels.append(
+            pn.Row(
+                pn.layout.HSpacer(),
+                pn.pane.Markdown(f"<div style='background:#f1f8e9; padding:10px; border-radius:10px;'><b>Virtual Jalil</b>: {self.answer}</div>", width=600),
+                pn.layout.HSpacer(),
+            )
+        )
 
     def clr_history(self, count=0):
         self.panels = []
@@ -180,21 +190,49 @@ cb = cbfs()
 
 submit_button = pn.widgets.Button(name="Send", button_type="primary")
 inp = pn.widgets.TextInput(placeholder='Enter text here…')
+spinner = pn.indicators.LoadingSpinner(value=False, width=50, height=50, color="primary")
 chat_box = pn.WidgetBox(*cb.panels, scroll=True)
 
 def handle_send(event):
+    spinner.value = True
     cb.convchain(inp.value)
     chat_box.objects = cb.panels
     inp.value = ''
+    spinner.value = False
 
 submit_button.on_click(handle_send)
 
-app = pn.Column(
-    pn.Row(pn.pane.Markdown("# Virtual_JalilMahmud_careerAI")),
-    pn.Row(inp, submit_button),
-    pn.layout.Divider(),
-    chat_box,
-    pn.layout.Divider(),
+chat_controls = pn.Row(
+    pn.Column(inp, submit_button, width=500),
+    pn.Spacer(width=20),
+    spinner
 )
+
+main_layout = pn.Column(
+    pn.pane.Markdown("<h2 style='text-align:center;'>Virtual_JalilMahmud_careerAI</h2>"),
+    pn.layout.Divider(),
+    chat_controls,
+    pn.layout.Divider(),
+    pn.Row(pn.layout.HSpacer(), chat_box, pn.layout.HSpacer(), sizing_mode="stretch_width"),
+    width=800,
+    align="center"
+)
+
+app = pn.Row(
+    pn.layout.HSpacer(),
+    pn.Column(
+        pn.layout.VSpacer(),
+        main_layout,
+        pn.layout.VSpacer(),
+        sizing_mode="stretch_both",
+        align="center",
+        min_height=800,
+        max_width=1000,
+        width_policy="max"
+    ),
+    pn.layout.HSpacer(),
+    sizing_mode="stretch_both"
+)
+
 
 app.servable()
