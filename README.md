@@ -1,5 +1,3 @@
-# chatbot-panel-app
-
 # Virtual_JalilMahmud_careerAI
 
 A conversational AI chatbot app designed for interactive career-related queries. This project uses a RAG (Retrieval-Augmented Generation) approach with a fully open-source stack—leveraging HuggingFace models and FAISS for smart document and memory search, all hosted with a modern Panel UI.
