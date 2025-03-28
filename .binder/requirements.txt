@@ -1,9 +1,0 @@
-panel
-param
-langchain
-langchain-community
-huggingface_hub
-sentence-transformers
-faiss-cpu
-python-dotenv
-requests
