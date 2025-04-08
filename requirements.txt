@@ -7,3 +7,5 @@ sentence-transformers
 faiss-cpu
 python-dotenv
 requests
+flask
+boto3
