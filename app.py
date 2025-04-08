@@ -28,9 +28,9 @@ metadata_file = "pdf_metadata.npy"
 bucket_name = "mycareerllm"  # your S3 bucket name
 
 # AWS S3 Configuration
-aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
-aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
-aws_region = os.getenv('AWS_DEFAULT_REGION')
+#aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+#aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+#aws_region = os.getenv('AWS_DEFAULT_REGION')
 
 # Chunking settings
 chunk_size = 256
@@ -42,12 +42,12 @@ tokenizer = AutoTokenizer.from_pretrained("xlm-roberta-base")
 model = AutoModel.from_pretrained("xlm-roberta-base")
 
 # Initialize Boto3 S3 client
-s3 = boto3.client(
-    's3', 
-    aws_access_key_id=aws_access_key_id, 
-    aws_secret_access_key=aws_secret_access_key, 
-    region_name=aws_region
-)
+#s3 = boto3.client(
+#    's3', 
+#    aws_access_key_id=aws_access_key_id, 
+#   aws_secret_access_key=aws_secret_access_key, 
+#    region_name=aws_region
+#)
 
 def send_to_telegram(message):
     url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
