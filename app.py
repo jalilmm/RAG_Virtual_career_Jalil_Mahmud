@@ -1,9 +1,9 @@
+import boto3
+import os
 from flask import Flask, request, jsonify, render_template
 from huggingface_hub import InferenceClient
 from transformers import AutoModel, AutoTokenizer
-import os
 import faiss
-import glob
 import numpy as np
 import torch
 import requests
@@ -25,6 +25,12 @@ client = InferenceClient(token=os.getenv("HUGGINGFACEHUB_API_TOKEN"))
 # FAISS index and metadata file paths
 index_file = "pdf_embeddings.faiss"
 metadata_file = "pdf_metadata.npy"
+bucket_name = "mycareerllm"  # your S3 bucket name
+
+# AWS S3 Configuration
+aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+aws_region = os.getenv('AWS_DEFAULT_REGION')
 
 # Chunking settings
 chunk_size = 256
@@ -35,6 +41,13 @@ print("Loading the multilingual embedding model...")
 tokenizer = AutoTokenizer.from_pretrained("xlm-roberta-base")
 model = AutoModel.from_pretrained("xlm-roberta-base")
 
+# Initialize Boto3 S3 client
+s3 = boto3.client(
+    's3', 
+    aws_access_key_id=aws_access_key_id, 
+    aws_secret_access_key=aws_secret_access_key, 
+    region_name=aws_region
+)
 
 def send_to_telegram(message):
     url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
@@ -84,14 +97,31 @@ def chat():
     return jsonify({"response": response})
 
 
+def download_from_s3(bucket_name, key, download_path):
+    """Download a file from S3 to local storage."""
+    try:
+        s3.download_file(bucket_name, key, download_path)
+        print(f"Downloaded {key} from S3.")
+    except Exception as e:
+        print(f"Error downloading {key}: {e}")
+
+
 def initialize_faiss():
+    # Check if FAISS files exist locally
     if os.path.exists(index_file) and os.path.exists(metadata_file):
         print("Loading existing FAISS index and metadata...")
         index = faiss.read_index(index_file)
         metadata = np.load(metadata_file, allow_pickle=True).tolist()
     else:
-        index = faiss.IndexFlatL2(768)
-        metadata = []
+        # If not, download them from S3
+        print("Downloading FAISS files from S3...")
+        download_from_s3(bucket_name, "pdf_embeddings.faiss", index_file)
+        download_from_s3(bucket_name, "pdf_metadata.npy", metadata_file)
+        
+        # Load the downloaded files
+        index = faiss.read_index(index_file)
+        metadata = np.load(metadata_file, allow_pickle=True).tolist()
+    
     return index, metadata
 
 
@@ -121,7 +151,7 @@ def generate_response(query, retrieved_chunks):
     return query_huggingface(prompt)
 
 
-
+# Initialize FAISS index and metadata by checking and downloading files from S3 if needed
 index, metadata = initialize_faiss()
 
 if __name__ == '__main__':
