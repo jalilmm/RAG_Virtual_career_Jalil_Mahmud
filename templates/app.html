@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jalil_Mahmud</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="chat-container">
+        <h2>Career Assistant for Jalil</h2>
+        <div class="chat-box" id="chatBox"></div>
+        <div class="input-container">
+            <input type="text" id="userInput" placeholder="Type your message...">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+        <div class="spinner" id="loadingSpinner"></div>
+    </div>
+    <script>
+        function addMessage(content, isUser) {
+            const chatBox = document.getElementById("chatBox");
+            const message = document.createElement("div");
+            message.className = "message" + (isUser ? " user-message" : " bot-message");
+            message.textContent = content;
+            chatBox.appendChild(message);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function showIntroMessage() {
+            const introMessage = "Hello! I am the career assistance chatbot for Jalil. My purpose is to help you understand how Jalil fits your team and job requirements. Feel free to ask about his skills, experience, and qualifications.";
+            addMessage(introMessage, false);
+        }
+
+        async function sendMessage() {
+            const spinner = document.getElementById("loadingSpinner");
+            const userInputElement = document.getElementById("userInput");
+            const userInput = userInputElement.value;
+            if (userInput.trim() === "") return;
+            addMessage(userInput, true);
+            userInputElement.value = "";
+            spinner.style.display = "block";
+
+            try {
+                const res = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query: userInput })
+                });
+                const data = await res.json();
+                spinner.style.display = "none";
+                if (data && data.response) {
+                    // Remove file reference from the response
+                    const cleanResponse = data.response.replace(/\(file: .*?\)/g, "");
+                    addMessage(cleanResponse, false);
+                } else {
+                    addMessage("Error: No response from the server.", false);
+                }
+            } catch (error) {
+                spinner.style.display = "none";
+                addMessage("Error: Unable to connect to the server.", false);
+            }
+        }
+
+        document.getElementById("userInput").addEventListener("keypress", function (e) {
+            if (e.key === "Enter") {
+                sendMessage();
+            }
+        });
+
+        window.onload = function() {
+            showIntroMessage();
+            const chatBox = document.getElementById("chatBox");
+            chatBox.scrollTop = chatBox.scrollHeight;
+        };
+    </script>
+</body>
+</html>
