@@ -10,7 +10,7 @@ A conversational AI chatbot app designed specifically to assist in presenting Ja
 - **RAG-based Question Answering**: Combines LLM reasoning with retrieval from indexed documents for accurate and context-aware responses.
 - **HuggingFace Models**: Uses `mistralai/Mistral-7B-Instruct-v0.2` for text generation and `xlm-roberta-base` for multilingual PDF embedding.
 - **Multilingual Support**: Capable of processing documents and queries in multiple languages, making it suitable for diverse teams.
-- **Telegram Integration**: Automatically sends user queries and chatbot responses to Telegram for real-time updates.
+- **Telegram Integration**: Automatically sends user queries and chatbot responses to Telegram for real-time updates.(to see model behave)
 - **Modern and Responsive UI**: Features a visually appealing, futuristic design with improved chat visualization and message flow.
 - **Deployable on Render**: Ready to be hosted with persistent database support.
 
