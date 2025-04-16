@@ -10,3 +10,4 @@ requests
 flask
 boto3
 gunicorn
+PyPDF2
