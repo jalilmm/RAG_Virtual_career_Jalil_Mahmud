@@ -1,53 +1,41 @@
-import boto3
 import os
-from flask import Flask, request, jsonify, render_template
-from huggingface_hub import InferenceClient
-from transformers import AutoModel, AutoTokenizer
+import torch
 import faiss
 import numpy as np
-import torch
 import requests
+from flask import Flask, request, jsonify, render_template
+from transformers import AutoModel, AutoTokenizer
+from huggingface_hub import InferenceClient
+from PyPDF2 import PdfReader
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
-# Initialize Flask app
+# Flask app
 app = Flask(__name__)
 
-# Telegram credentials from environment variables
+# Telegram
 telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
 telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
-# Initialize the InferenceClient with the API token
+# Hugging Face Client
 client = InferenceClient(token=os.getenv("HUGGINGFACEHUB_API_TOKEN"))
 
-# FAISS index and metadata file paths
-index_file = "pdf_embeddings.faiss"
-metadata_file = "pdf_metadata.npy"
-bucket_name = "mycareerllm"  # your S3 bucket name
-
-# AWS S3 Configuration
-#aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
-#aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
-#aws_region = os.getenv('AWS_DEFAULT_REGION')
-
-# Chunking settings
-chunk_size = 256
-chunk_overlap = 50
-
-# Load the multilingual embedding model once
+# Embedding model
 print("Loading the multilingual embedding model...")
 tokenizer = AutoTokenizer.from_pretrained("xlm-roberta-base")
 model = AutoModel.from_pretrained("xlm-roberta-base")
 
-# Initialize Boto3 S3 client
-#s3 = boto3.client(
-#    's3', 
-#    aws_access_key_id=aws_access_key_id, 
-#   aws_secret_access_key=aws_secret_access_key, 
-#    region_name=aws_region
-#)
+# FAISS and metadata
+index_file = "pdf_embeddings.faiss"
+metadata_file = "pdf_metadata.npy"
+pdf_folder = "pdfs"
+
+# Chunking
+chunk_size = 256
+chunk_overlap = 50
+
 
 def send_to_telegram(message):
     url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
@@ -61,7 +49,7 @@ def send_to_telegram(message):
 def query_huggingface(prompt):
     messages = [{"role": "user", "content": prompt}]
     response = client.chat_completion(
-        model="mistralai/Mistral-7B-Instruct-v0.2",
+        model="mistralai/Mistral-7B-Instruct-v0.3",
         messages=messages,
         temperature=0.7,
         max_tokens=512
@@ -80,48 +68,58 @@ def embed_text(text):
     return embeddings
 
 
-@app.route('/')
-def index():
-    return render_template("app.html")
+def chunk_text(text):
+    words = text.split()
+    chunks = []
+    for i in range(0, len(words), chunk_size - chunk_overlap):
+        chunk = " ".join(words[i:i + chunk_size])
+        chunks.append(chunk)
+    return chunks
 
 
-@app.route('/chat', methods=['POST'])
-def chat():
-    user_query = request.json.get("query")
-    send_to_telegram(f"User Input: {user_query}")
+def read_pdf_files(folder_path):
+    documents = []
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".pdf"):
+            file_path = os.path.join(folder_path, filename)
+            reader = PdfReader(file_path)
+            full_text = ""
+            for page in reader.pages:
+                full_text += page.extract_text() or ""
+            chunks = chunk_text(full_text)
+            for i, chunk in enumerate(chunks):
+                documents.append((filename, i, chunk))
+    return documents
 
-    retrieved_chunks = search_faiss(user_query, index, metadata)
-    response = generate_response(user_query, retrieved_chunks)
 
-    send_to_telegram(f"LLM Response: {response}")
-    return jsonify({"response": response})
+def create_faiss_index_from_pdfs(pdf_folder, index_file, metadata_file):
+    documents = read_pdf_files(pdf_folder)
+    print(f"Found {len(documents)} chunks to embed...")
 
+    embeddings = []
+    for doc in documents:
+        emb = embed_text(doc[2])
+        embeddings.append(emb)
 
-def download_from_s3(bucket_name, key, download_path):
-    """Download a file from S3 to local storage."""
-    try:
-        s3.download_file(bucket_name, key, download_path)
-        print(f"Downloaded {key} from S3.")
-    except Exception as e:
-        print(f"Error downloading {key}: {e}")
+    embeddings = np.vstack(embeddings)
+    index = faiss.IndexFlatL2(embeddings.shape[1])
+    index.add(embeddings)
+
+    faiss.write_index(index, index_file)
+    np.save(metadata_file, np.array(documents, dtype=object), allow_pickle=True)
+
+    print("FAISS index and metadata created and saved.")
+    return index, documents
 
 
 def initialize_faiss():
-    # Check if FAISS files exist locally
     if os.path.exists(index_file) and os.path.exists(metadata_file):
         print("Loading existing FAISS index and metadata...")
         index = faiss.read_index(index_file)
         metadata = np.load(metadata_file, allow_pickle=True).tolist()
     else:
-        # If not, download them from S3
-        print("Downloading FAISS files from S3...")
-        download_from_s3(bucket_name, "pdf_embeddings.faiss", index_file)
-        download_from_s3(bucket_name, "pdf_metadata.npy", metadata_file)
-        
-        # Load the downloaded files
-        index = faiss.read_index(index_file)
-        metadata = np.load(metadata_file, allow_pickle=True).tolist()
-    
+        print("FAISS files not found. Creating new index from PDFs...")
+        index, metadata = create_faiss_index_from_pdfs(pdf_folder, index_file, metadata_file)
     return index, metadata
 
 
@@ -138,21 +136,48 @@ def search_faiss(query, index, metadata, top_k=5):
 
 
 def generate_response(query, retrieved_chunks):
-    # Combine the chunk texts without explicitly mentioning the file or chunk number
-    context = "\n".join([chunk[2] for chunk in retrieved_chunks])
+    context_parts = []
+    for chunk in retrieved_chunks:
+        if isinstance(chunk, (list, tuple)) and len(chunk) > 2 and isinstance(chunk[2], str):
+            if chunk[2].strip():
+                context_parts.append(chunk[2])
+    
+    context = "\n".join(context_parts)
+
+    if not context.strip():
+        return "Sorry, I couldn’t find relevant context to answer your question."
+
     prompt = (
         f"Context:\n{context}\n\n"
         f"User Query: {query}\n\n"
-        
-        "If the context does not contain relevant information, just say you don't know. "
+        "You are representer of Jalil Mahmud. If the context does not contain relevant information, just say you don't know. "
         "Do not mention file names or sources. Keep the answer clear and to the point."
     )
-    
+
     return query_huggingface(prompt)
 
 
-# Initialize FAISS index and metadata by checking and downloading files from S3 if needed
+@app.route('/')
+def index():
+    return render_template("app.html")
+
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    user_query = request.json.get("query")
+    send_to_telegram(f"User Input: {user_query}")
+
+    retrieved_chunks = search_faiss(user_query, index, metadata)
+    print("Retrieved chunks:", retrieved_chunks)  # debug print
+    response = generate_response(user_query, retrieved_chunks)
+
+    send_to_telegram(f"LLM Response: {response}")
+    return jsonify({"response": response})
+
+
+# Load or build FAISS index
 index, metadata = initialize_faiss()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
+
